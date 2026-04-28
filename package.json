@@ -1,0 +1,32 @@
+{
+  "name": "signalk-data-simulator",
+  "version": "0.1.0",
+  "description": "High-frequency configurable per-path data simulator for SignalK Node Server",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "signalk-node-server-plugin",
+    "signalk-category-instruments",
+    "signalk",
+    "simulator",
+    "marine"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@signalk/server-api": "^2.10.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}
