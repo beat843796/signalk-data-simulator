@@ -40,12 +40,18 @@ interface TanksConfig {
   blackWater: TankSpec[];
 }
 
+interface BatteriesConfig {
+  enabled: boolean;
+  ids: string[];
+}
+
 interface Options {
   paths?: PathConfig[];
   autopilot?: AutopilotConfig;
   gps?: GpsConfig;
   engines?: EnginesConfig;
   tanks?: TanksConfig;
+  batteries?: BatteriesConfig;
 }
 
 const PLUGIN_ID = 'signalk-data-simulator';
@@ -146,6 +152,13 @@ const DEFAULT_TANKS: TanksConfig = {
   freshWater: [{ capacityL: 300 }],
   wasteWater: [{ capacityL: 80 }],
   blackWater: [{ capacityL: 80 }]
+};
+
+/* Mixed IDs by design: 'starter' uses the spec-blessed semantic name for
+   the engine-cranking battery; '1'..'4' are house-bank instances. */
+const DEFAULT_BATTERIES: BatteriesConfig = {
+  enabled: true,
+  ids: ['starter', '1', '2', '3', '4']
 };
 
 /* ---------- Section expanders: turn config sugar into PathConfig entries ---------- */
@@ -299,6 +312,24 @@ function expandTanks(cfg: TanksConfig): PathConfig[] {
   return out;
 }
 
+function expandBatteries(cfg: BatteriesConfig): PathConfig[] {
+  if (!cfg.enabled) return [];
+  /* Voltage walks around 12.6 V (nominal 12 V resting). Range 11.8–13.8 V
+     covers heavy-load sag through float-charging without straying into
+     non-physical territory. */
+  return (cfg.ids ?? []).map((id) => ({
+    path: `electrical.batteries.${id}.voltage`,
+    intervalMs: 1000,
+    generator: {
+      type: 'randomWalk',
+      initial: 12.6,
+      stepStdDev: 0.02,
+      min: 11.8,
+      max: 13.8
+    } as GeneratorConfig
+  }));
+}
+
 const pluginFactory = (app: ServerAPI): Plugin => {
   const timers: NodeJS.Timeout[] = [];
   let statusText = 'Idle';
@@ -433,6 +464,24 @@ const pluginFactory = (app: ServerAPI): Plugin => {
             wasteWater: tankListSchema('Waste (grey) water tanks'),
             blackWater: tankListSchema('Black water tanks')
           }
+        },
+        batteries: {
+          type: 'object',
+          title: 'Batteries',
+          description:
+            'Generates electrical.batteries.<id>.voltage for each ID. Voltage walks 11.8–13.8 V (12 V resting nominal).',
+          default: DEFAULT_BATTERIES,
+          properties: {
+            enabled: { type: 'boolean', default: true },
+            ids: {
+              type: 'array',
+              title: 'Battery IDs',
+              description:
+                "SignalK instance IDs. Convention: 'starter' for the engine cranking battery; numeric for house bank instances.",
+              items: { type: 'string' },
+              default: DEFAULT_BATTERIES.ids
+            }
+          }
         }
       }
     }),
@@ -446,13 +495,15 @@ const pluginFactory = (app: ServerAPI): Plugin => {
       const gps = { ...DEFAULT_GPS, ...(opts.gps ?? {}) };
       const engines = { ...DEFAULT_ENGINES, ...(opts.engines ?? {}) };
       const tanks = { ...DEFAULT_TANKS, ...(opts.tanks ?? {}) };
+      const batteries = { ...DEFAULT_BATTERIES, ...(opts.batteries ?? {}) };
 
       const expanded: PathConfig[] = [
         ...paths,
         ...expandAutopilot(autopilot),
         ...expandGps(gps),
         ...expandEngines(engines),
-        ...expandTanks(tanks)
+        ...expandTanks(tanks),
+        ...expandBatteries(batteries)
       ];
 
       const startMs = Date.now();
@@ -467,7 +518,8 @@ const pluginFactory = (app: ServerAPI): Plugin => {
           : `Simulating ${expanded.length} path(s)`;
       app.debug?.(
         `${PLUGIN_ID} started: paths=${paths.length} autopilot=${autopilot.enabled} ` +
-          `gps=${gps.enabled} engines=${engines.count} tanks=${tankCount(tanks)}`
+          `gps=${gps.enabled} engines=${engines.count} tanks=${tankCount(tanks)} ` +
+          `batteries=${batteries.enabled ? batteries.ids.length : 0}`
       );
     },
 
