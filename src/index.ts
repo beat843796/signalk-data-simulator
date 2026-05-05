@@ -26,7 +26,6 @@ interface GpsConfig {
 
 interface EnginesConfig {
   count: number;
-  idPrefix: string;
 }
 
 interface TankSpec {
@@ -138,8 +137,7 @@ const DEFAULT_GPS: GpsConfig = {
 };
 
 const DEFAULT_ENGINES: EnginesConfig = {
-  count: 1,
-  idPrefix: 'engine'
+  count: 1
 };
 
 const DEFAULT_TANKS: TanksConfig = {
@@ -206,9 +204,10 @@ function expandGps(cfg: GpsConfig): PathConfig[] {
 function expandEngines(cfg: EnginesConfig): PathConfig[] {
   const out: PathConfig[] = [];
   const n = Math.max(0, Math.floor(cfg.count));
-  const prefix = cfg.idPrefix || 'engine';
+  /* 1-based numeric IDs: matches conventional UI display ("Engine 1") and
+     the spec's own examples (FreshWater_2, Port_Engine) which imply 1-based. */
   for (let i = 0; i < n; i++) {
-    const id = `${prefix}${i}`;
+    const id = `${i + 1}`;
     const base = `propulsion.${id}`;
     out.push(
       {
@@ -259,7 +258,8 @@ function expandTanks(cfg: TanksConfig): PathConfig[] {
 
   const addTank = (typePath: string, idx: number, capL: number, drains: boolean) => {
     const capM3 = capL / 1000;
-    const base = `tanks.${typePath}.${idx}`;
+    /* 1-based ID — see expandEngines for the rationale. */
+    const base = `tanks.${typePath}.${idx + 1}`;
     /* drain tanks: full -> nearly empty -> back. fill tanks: empty -> nearly full -> back. */
     const fromLvl = drains ? 1.0 : 0.0;
     const toLvl = drains ? 0.05 : 0.95;
@@ -403,7 +403,7 @@ const pluginFactory = (app: ServerAPI): Plugin => {
           type: 'object',
           title: 'Engines',
           description:
-            'Generates propulsion.<id>.{revolutions,temperature,fuel.rate,alternatorVoltage,oilPressure} for each engine.',
+            'Generates propulsion.<id>.{revolutions,temperature,fuel.rate,alternatorVoltage,oilPressure} for each engine. IDs are 1-based: propulsion.1, propulsion.2, ...',
           default: DEFAULT_ENGINES,
           properties: {
             count: {
@@ -411,12 +411,6 @@ const pluginFactory = (app: ServerAPI): Plugin => {
               minimum: 0,
               default: 1,
               title: 'Number of engines'
-            },
-            idPrefix: {
-              type: 'string',
-              default: 'engine',
-              title: 'Engine ID prefix',
-              description: 'IDs become <prefix>0, <prefix>1, ...'
             }
           }
         },
@@ -424,7 +418,7 @@ const pluginFactory = (app: ServerAPI): Plugin => {
           type: 'object',
           title: 'Tanks',
           description:
-            'Generates tanks.<type>.<id>.{capacity,currentLevel,currentVolume}. Drain tanks (fuel, freshWater) ramp full→empty→full; fill tanks (wasteWater, blackWater) ramp empty→full→empty.',
+            'Generates tanks.<type>.<id>.{capacity,currentLevel,currentVolume}. IDs are 1-based: tanks.fuel.1, tanks.fuel.2, ... Drain tanks (fuel, freshWater) ramp full→empty→full; fill tanks (wasteWater, blackWater) ramp empty→full→empty.',
           default: DEFAULT_TANKS,
           properties: {
             cycleSec: {
